@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api, catalog, Health, LibraryModel, LocalModel, ServiceDef, ServiceState } from '../api';
+import { api, catalog, EmbeddingModelInfo, Health, LibraryModel, LocalModel, ServiceDef, ServiceState } from '../api';
 import { Button, Group, Segmented, Tag, serviceIcon, useUi } from '../components/design';
 import { statusTag, useHub } from '../store';
 import { TaskBar } from './Catalog';
@@ -147,7 +147,7 @@ function OllamaModels() {
   const { tasks, clearTask } = useHub();
   const { confirm, toast } = useUi();
   const [models, setModels] = useState<LocalModel[]>([]);
-  const [dims, setDims] = useState<Record<string, number | null>>({});
+  const [embeds, setEmbeds] = useState<EmbeddingModelInfo[] | null>(null);
   const [lib, setLib] = useState<{ embedding: LibraryModel[]; chat: LibraryModel[]; offline: boolean } | null>(null);
   const [tab, setTab] = useState<'embedding' | 'chat'>('embedding');
 
@@ -167,13 +167,17 @@ function OllamaModels() {
   };
   useEffect(() => { load(); loadLib(); }, []);
   useEffect(() => { if (Object.entries(tasks).some(([k, t]) => k.startsWith('model:') && t.done)) load(); }, [tasks]);
-  // 已下载模型自动实测维度：能向量化的就是向量模型（知舟要填这个维度），否则视为对话模型
-  useEffect(() => {
-    models.filter((m) => !(m.name in dims)).forEach((m) => {
-      setDims((p) => ({ ...p, [m.name]: null }));
-      api.modelDims(m.name).then((d) => setDims((p) => ({ ...p, [m.name]: d }))).catch(() => setDims((p) => ({ ...p, [m.name]: 0 })));
-    });
-  }, [models]);
+  // 已下载模型实测维度（服务台缓存）：能向量化的是向量模型，其余为对话模型
+  const loadEmbeds = () => api.embeddingModels().then(setEmbeds).catch(() => setEmbeds([]));
+  useEffect(() => { loadEmbeds(); }, [models]);
+  const changeDims = async (model: string, value: number, native: number) => {
+    const r = await confirm({ level: 'L2', title: `把 ${model} 的维度改为 ${value}？`,
+      message: '知舟里已经用这个模型建好的索引会和新维度不一致，改完需要在知舟「知识检索」里重建索引（扫码重新配对也会带上新维度）。',
+      confirmText: '修改' });
+    if (!r.ok) return;
+    await api.setEmbeddingDims(model, value === native ? 0 : value);
+    loadEmbeds();
+  };
 
   const installed = (ref: string) => models.some((m) => m.name === ref || m.name === `${ref}:latest`);
   const pull = (ref: string) => { clearTask(`model:${ref}`); api.pullModel(ref).catch((e) => toast(String(e))); };
@@ -213,16 +217,22 @@ function OllamaModels() {
       </div>
       {models.length === 0 && pulling.length === 0 && <div className="row-meta">还没有模型，从下方模型库挑一个下载。知识库检索推荐中文表现好的向量模型，如 qwen3-embedding 或 bge-m3。</div>}
       {models.map((m) => {
-        const d = dims[m.name];
+        const e = embeds?.find((x) => x.model === m.name);
         return (
-          <div key={m.name} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div key={m.name} style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
             <span className="model-name" style={{ flex: 1 }}>{m.name}</span>
             <span className="row-meta">{fmtSize(m.sizeBytes)}</span>
-            {d === null || d === undefined ? <Tag tone="idle">识别中</Tag> : d > 0 ? <Tag tone="brand">向量 · {d} 维</Tag> : <Tag tone="idle">对话模型</Tag>}
+            {embeds === null ? <Tag tone="idle">识别中</Tag> : !e ? <Tag tone="idle">对话模型</Tag> : e.options.length > 1 ? (
+              <select className="input" style={{ width: 168, height: 32 }} value={e.dims} title="知舟使用的向量维度"
+                onChange={(ev) => changeDims(m.name, Number(ev.target.value), e.nativeDims)}>
+                {e.options.map((d) => <option key={d} value={d}>{d === e.nativeDims ? `${d} 维（原生）` : `${d} 维`}</option>)}
+              </select>
+            ) : <Tag tone="brand">向量 · {e.dims} 维</Tag>}
             <Button small kind="text" onClick={() => remove(m.name)}>删除</Button>
           </div>
         );
       })}
+      {embeds?.some((e) => e.options.length > 1) && <div className="row-meta">可下拉选择维度的模型支持「截取维度」：维度越小，手机上占用越少、检索越快，效果略降。中文知识库 1024 维通常就够用。</div>}
       {pulling.map(([k, t]) => (
         <div key={k}><div className="model-name" style={{ marginBottom: 6 }}>{k.slice(6)}</div><TaskBar task={t} /></div>
       ))}

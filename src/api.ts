@@ -16,6 +16,7 @@ export type ServiceStatus = 'not_installed' | 'stopped' | 'running' | 'starting'
 export interface ServiceState { id: string; status: ServiceStatus; hostPort: number; image: string; useGpu: boolean; detail: string }
 export interface Health { ok: boolean; detail: string; ms: number }
 export interface LibraryModel { name: string; description: string; sizes: string[]; capabilities: string[]; pulls: string }
+export interface EmbeddingModelInfo { model: string; nativeDims: number; dims: number; truncatable: boolean; options: number[] }
 export interface LocalModel { name: string; sizeBytes: number; family: string }
 export interface LanAddress { ip: string; adapter: string; primary: boolean }
 export interface ConnectInfo { addresses: LanAddress[]; gatewayPort: number; gatewayError?: string; key: string; firewallReady: boolean }
@@ -50,6 +51,8 @@ export const api = {
   pullModel: (name: string) => call<void>('pull_model', { name }),
   deleteModel: (name: string) => call<void>('delete_model', { name }),
   modelDims: (name: string) => call<number>('model_dims', { name }),
+  embeddingModels: () => call<EmbeddingModelInfo[]>('embedding_models'),
+  setEmbeddingDims: (model: string, dims: number) => call<void>('set_embedding_dims', { model, dims }),
   modelLibrary: (kind: 'embedding' | 'chat') => call<LibraryModel[]>('model_library', { kind }),
   applyOptions: (id: string) => call<void>('apply_service_options', { id }),
   trySearch: (q: string) => call<SearchHit[]>('try_search', { q }),
@@ -165,6 +168,10 @@ function demo(cmd: string, args?: Record<string, unknown>): unknown {
     case 'model_library':
       return (args?.kind === 'embedding' ? catalog.embeddingModels : catalog.chatModels)
         .map((m) => ({ name: m.name.split(':')[0], description: m.note, sizes: m.name.includes(':') ? [m.name.split(':')[1]] : [], capabilities: [], pulls: '' }));
+    case 'embedding_models':
+      return [{ model: 'qwen3-embedding:8b', nativeDims: 4096, dims: 1024, truncatable: true, options: [4096, 2048, 1536, 1024, 768, 512, 256] }];
+    case 'set_embedding_dims':
+      return undefined;
     case 'model_dims':
       return 1024;
     case 'connect_info':

@@ -7,11 +7,11 @@
 use crate::settings::Settings;
 use axum::{
     body::Body,
-    extract::{Query, Request, State},
+    extract::{OriginalUri, Query, Request, State},
     http::{header, HeaderMap, StatusCode},
     middleware::{self, Next},
     response::{IntoResponse, Response},
-    routing::{get, post},
+    routing::{any, get, post},
     Json, Router,
 };
 use base64::Engine;
@@ -25,9 +25,45 @@ use tokio::sync::oneshot;
 pub struct Shared {
     pub key: Arc<RwLock<String>>,
     pub settings: Arc<RwLock<Settings>>,
-    client: reqwest::Client,
+    pub client: reqwest::Client,
     /// 向量模型实测维度缓存（模型名 → 维度）：首次实测要加载模型，之后直接返回
     dims: Arc<RwLock<BTreeMap<String, usize>>>,
+}
+
+impl Shared {
+    /// 模型原生维度（实测一次后缓存；0 = 不能向量化，即对话模型）
+    pub async fn native_dims(&self, port: u16, model: &str) -> usize {
+        if let Some(d) = self.dims.read().unwrap().get(model).copied() {
+            return d;
+        }
+        let d = crate::ollama::embed_dims(port, model).await.unwrap_or(0);
+        self.dims.write().unwrap().insert(model.to_string(), d);
+        d
+    }
+
+    /// 已下载模型中可向量化的那些，含原生 / 实际输出维度
+    pub async fn embedding_models(&self) -> Vec<crate::ollama::EmbeddingModelInfo> {
+        let settings = self.settings.read().unwrap().clone();
+        let port = settings.host_port("ollama");
+        let mut out = Vec::new();
+        if let Ok(models) = crate::ollama::list(port).await {
+            for m in models {
+                let native = self.native_dims(port, &m.name).await;
+                if native == 0 {
+                    continue;
+                }
+                let truncatable = crate::ollama::truncatable(&m.name);
+                out.push(crate::ollama::EmbeddingModelInfo {
+                    dims: crate::ollama::effective_dims(&settings, &m.name, native),
+                    options: crate::ollama::dim_options(native, truncatable),
+                    model: m.name,
+                    native_dims: native,
+                    truncatable,
+                });
+            }
+        }
+        out
+    }
 }
 
 impl Shared {
@@ -90,6 +126,13 @@ fn router(shared: Shared) -> Router {
         .route("/v1/chat/completions", post(chat))
         .route("/search", get(search))
         .route("/v1/hub/info", get(hub_info))
+        // MinerU 4 V1 原生接口透传（知舟 open-mineru 处理器：上传 → 解析任务 → 轮询 → 取结果，长文档不受单次请求超时限制）
+        .route("/v1/uploads", any(mineru_v1))
+        .route("/v1/uploads/*rest", any(mineru_v1))
+        .route("/v1/parse/jobs", any(mineru_v1))
+        .route("/v1/parse/jobs/*rest", any(mineru_v1))
+        .route("/v1/files/*rest", any(mineru_v1))
+        .route("/v1/tiers", get(mineru_v1))
         .layer(middleware::from_fn_with_state(shared.clone(), auth))
         .layer(axum::extract::DefaultBodyLimit::max(200 * 1024 * 1024));
     Router::new()
@@ -163,49 +206,59 @@ async fn parse(State(s): State<Shared>, Json(req): Json<ParseReq>) -> Response {
 }
 
 async fn mineru(s: &Shared, bytes: Vec<u8>, format: &str, filename: Option<&str>) -> Result<(String, Option<usize>), String> {
+    // MinerU 4：POST /v1/file_parse（原始字节 + 查询参数），同步等待最长 1 小时；结果在 files[0].content.markdown
     let name = filename.map(str::to_string).unwrap_or_else(|| format!("document.{}", if format.is_empty() { "pdf" } else { format }));
-    let part = reqwest::multipart::Part::bytes(bytes).file_name(name);
     let settings = s.settings.read().unwrap().clone();
-    let opt = |k: &str, d: &str| settings.option("mineru", k, d);
-    let form = reqwest::multipart::Form::new()
-        .part("files", part)
-        .text("return_md", "true")
-        .text("backend", "pipeline")
-        .text("lang_list", opt("lang", "ch"))
-        .text("formula_enable", opt("formula", "true"))
-        .text("table_enable", opt("table", "true"));
+    let tier = settings.option("mineru", "tier", "standard");
+    let ocr_mode = settings.option("mineru", "ocr_mode", "auto");
+    let mut url = url::Url::parse(&format!("{}/v1/file_parse", s.upstream("mineru"))).unwrap();
+    url.query_pairs_mut()
+        .append_pair("filename", &name)
+        .append_pair("output_formats", "markdown")
+        .append_pair("response_format", "json")
+        .append_pair("tier", &tier)
+        .append_pair("ocr_mode", &ocr_mode)
+        .append_pair("wait_timeout", "3600");
     let resp = s
         .client
-        .post(format!("{}/file_parse", s.upstream("mineru")))
-        .multipart(form)
+        .post(url)
+        .header(header::CONTENT_TYPE.as_str(), "application/octet-stream")
+        .body(bytes)
         .send()
         .await
         .map_err(|_| "文档解析服务未运行：请在服务台启动 MinerU".to_string())?;
     let status = resp.status();
     let v: Value = resp.json().await.map_err(|e| format!("MinerU 返回无法解析：{e}"))?;
-    if !status.is_success() {
-        return Err(format!("MinerU：{}", v["detail"].as_str().or(v["error"].as_str()).unwrap_or("解析失败")));
+    if status.as_u16() == 202 {
+        return Err("文档较长，解析超过 1 小时仍未完成；建议在知舟改用「MinerU 本地部署」（扫码配对会自动设置）".into());
     }
-    let md = v["results"]
-        .as_object()
-        .and_then(|m| m.values().next())
-        .and_then(|r| r["md_content"].as_str())
-        .or_else(|| v["md_content"].as_str())
-        .ok_or("MinerU 未返回 Markdown")?;
+    if !status.is_success() {
+        let msg = v["error"]["message"].as_str().or(v["detail"].as_str()).unwrap_or("解析失败");
+        return Err(format!("MinerU：{msg}"));
+    }
+    let file = &v["files"][0];
+    if let Some(e) = file["error"]["message"].as_str() {
+        return Err(format!("MinerU：{e}"));
+    }
+    let md = file["content"]["markdown"].as_str().ok_or("MinerU 未返回 Markdown")?;
     Ok((md.to_string(), None))
 }
 
 // ---------- 向量 ----------
 
-/// 支持截取维度（Matryoshka）的模型：输出维度大于所需时截取并重新归一化
-fn supports_truncation(model: &str) -> bool {
-    let m = model.to_ascii_lowercase();
-    m.starts_with("qwen3-embedding") || m.starts_with("nomic-embed-text")
-}
-
 async fn embeddings(State(s): State<Shared>, Json(body): Json<Value>) -> Response {
-    let want = body["dimensions"].as_u64().map(|d| d as usize);
     let model = body["model"].as_str().unwrap_or("").to_string();
+    // 知舟未指定维度（服务商默认）时，按服务台「本地模型」里为该模型设的输出维度截取
+    let want = match body["dimensions"].as_u64() {
+        Some(d) => Some(d as usize),
+        None => {
+            let port = s.settings.read().unwrap().host_port("ollama");
+            let native = s.native_dims(port, &model).await;
+            let settings = s.settings.read().unwrap().clone();
+            let eff = crate::ollama::effective_dims(&settings, &model, native);
+            if native > 0 && eff < native { Some(eff) } else { None }
+        }
+    };
     let resp = match s.client.post(format!("{}/v1/embeddings", s.upstream("ollama"))).json(&body).send().await {
         Ok(r) => r,
         Err(_) => return openai_err(StatusCode::BAD_GATEWAY, "本地模型服务未运行：请在服务台启动 Ollama"),
@@ -224,7 +277,7 @@ async fn embeddings(State(s): State<Shared>, Json(body): Json<Value>) -> Respons
             if vec.len() == d {
                 continue;
             }
-            if vec.len() > d && supports_truncation(&model) {
+            if vec.len() > d && crate::ollama::truncatable(&model) {
                 let cut = &vec[..d];
                 let norm = cut.iter().map(|x| x * x).sum::<f64>().sqrt().max(1e-12);
                 item["embedding"] = json!(cut.iter().map(|x| x / norm).collect::<Vec<_>>());
@@ -292,24 +345,13 @@ async fn hub_info(State(s): State<Shared>) -> Response {
     let mut embedding = Vec::new();
     let mut chat = false;
     if running.get("ollama").copied().unwrap_or(false) {
+        let infos = s.embedding_models().await;
+        for m in &infos {
+            embedding.push(json!({ "model": m.model, "dims": m.dims }));
+        }
         let port = settings.host_port("ollama");
         if let Ok(models) = crate::ollama::list(port).await {
-            for m in models {
-                let cached = s.dims.read().unwrap().get(&m.name).copied();
-                let dims = match cached {
-                    Some(d) => d,
-                    None => {
-                        let d = crate::ollama::embed_dims(port, &m.name).await.unwrap_or(0);
-                        s.dims.write().unwrap().insert(m.name.clone(), d);
-                        d
-                    }
-                };
-                if dims > 0 {
-                    embedding.push(json!({ "model": m.name, "dims": dims }));
-                } else {
-                    chat = true;
-                }
-            }
+            chat = models.len() > infos.len();
         }
     }
     Json(json!({
@@ -323,4 +365,50 @@ async fn hub_info(State(s): State<Shared>) -> Response {
         "embeddingModels": embedding
     }))
     .into_response()
+}
+
+// ---------- MinerU 4 V1 透传 ----------
+
+/// 原样转发到 MinerU；JSON 响应里 MinerU 自报的本机地址（如 upload_url 的 http://127.0.0.1:8800）
+/// 改写成手机访问网关用的地址，知舟才会把文件传到网关、并把 Key 带上（同源才带）
+async fn mineru_v1(State(s): State<Shared>, OriginalUri(uri): OriginalUri, req: Request) -> Response {
+    let method = req.method().clone();
+    let headers = req.headers().clone();
+    let host = headers.get(header::HOST).and_then(|v| v.to_str().ok()).unwrap_or("").to_string();
+    let body = match axum::body::to_bytes(req.into_body(), 200 * 1024 * 1024).await {
+        Ok(b) => b,
+        Err(_) => return err(StatusCode::PAYLOAD_TOO_LARGE, "文件超过 200 MB"),
+    };
+    let upstream = s.upstream("mineru");
+    let path = uri.path_and_query().map(|p| p.as_str()).unwrap_or("/");
+    let mut rb = s.client.request(reqwest::Method::from_bytes(method.as_str().as_bytes()).unwrap_or(reqwest::Method::GET),
+        format!("{upstream}{path}"));
+    for name in [header::CONTENT_TYPE, header::ACCEPT] {
+        if let Some(v) = headers.get(&name).and_then(|v| v.to_str().ok()) {
+            rb = rb.header(name.as_str(), v);
+        }
+    }
+    let resp = match rb.body(body.to_vec()).send().await {
+        Ok(r) => r,
+        Err(_) => return err(StatusCode::BAD_GATEWAY, "文档解析服务未运行：请在服务台启动 MinerU"),
+    };
+    let is_json = resp
+        .headers()
+        .get(reqwest::header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .map(|v| v.contains("json"))
+        .unwrap_or(false);
+    if !is_json || host.is_empty() {
+        return stream_back(resp);
+    }
+    let status = StatusCode::from_u16(resp.status().as_u16()).unwrap_or(StatusCode::BAD_GATEWAY);
+    let text = resp.text().await.unwrap_or_default();
+    let port = s.settings.read().unwrap().host_port("mineru");
+    let gateway = format!("http://{host}");
+    let mut rewritten = text;
+    for origin in [format!("http://127.0.0.1:{port}"), format!("http://localhost:{port}"),
+        "http://127.0.0.1:8000".to_string(), "http://0.0.0.0:8000".to_string(), "http://localhost:8000".to_string()] {
+        rewritten = rewritten.replace(&origin, &gateway);
+    }
+    (status, [(header::CONTENT_TYPE, "application/json")], rewritten).into_response()
 }

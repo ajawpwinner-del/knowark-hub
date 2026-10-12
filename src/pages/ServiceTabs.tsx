@@ -21,9 +21,8 @@ const OPTIONS: Record<string, Opt[]> = {
     { key: 'safe_search', label: '安全搜索', desc: '过滤成人内容。', def: '0', kind: 'seg', options: [{ value: '0', label: '关闭' }, { value: '1', label: '适中' }, { value: '2', label: '严格' }] }
   ],
   mineru: [
-    { key: 'lang', label: '文档主要语言', desc: '影响扫描页的文字识别。中英混排选中文。', def: 'ch', kind: 'seg', options: [{ value: 'ch', label: '中文' }, { value: 'en', label: '英文' }, { value: 'japan', label: '日文' }, { value: 'korean', label: '韩文' }] },
-    { key: 'formula', label: '识别数学公式', desc: '转成 LaTeX。关闭可加快速度。', def: 'true', kind: 'switch' },
-    { key: 'table', label: '识别表格', desc: '转成 Markdown 表格。关闭可加快速度。', def: 'true', kind: 'switch' }
+    { key: 'tier', label: '解析档位', desc: '知舟扫码配对用「标准」。快速：只抽文字层，最快；基础：轻量模型；标准：适合大多数文档；高级：疑难版面，最慢。CPU 上标准档约每页 20 秒。', def: 'standard', kind: 'seg', options: [{ value: 'flash', label: '快速' }, { value: 'basic', label: '基础' }, { value: 'standard', label: '标准' }, { value: 'advanced', label: '高级' }] },
+    { key: 'ocr_mode', label: '文字识别', desc: '自动：有文字层就直接用，扫描件才识别；强制识别：文字层乱码时用。', def: 'auto', kind: 'seg', options: [{ value: 'auto', label: '自动' }, { value: 'txt', label: '只用文字层' }, { value: 'ocr', label: '强制识别' }] }
   ]
 };
 

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import QRCode from 'qrcode';
-import { api, ConnectInfo, saveTextFile } from '../api';
+import { api, ConnectInfo, EmbeddingModelInfo, saveTextFile } from '../api';
 import { Button, Group, Icons, Tag, useUi } from '../components/design';
 import { useHub } from '../store';
 
@@ -14,6 +14,8 @@ export function Connect() {
   const [ip, setIp] = useState('');
   const [showKey, setShowKey] = useState(false);
   const [qr, setQr] = useState('');
+  const [embeds, setEmbeds] = useState<EmbeddingModelInfo[]>([]);
+  useEffect(() => { api.embeddingModels().then(setEmbeds).catch(() => setEmbeds([])); }, [services]);
   const load = () => api.connectInfo().then((i) => { setInfo(i); setIp((cur) => cur || i.addresses[0]?.ip || '127.0.0.1'); });
   useEffect(() => { load(); }, []);
 
@@ -25,8 +27,8 @@ export function Connect() {
     const list: Entry[] = [];
     if (running('mineru')) {
       list.push({
-        id: 'doc', title: '文档解析', where: '知舟设置 → 文档处理 → 「文档解析」页签',
-        fields: [{ k: '服务', v: '通用 REST 桥接' }, { k: '地址', v: `${base}/v1/documents/parse#` }, { k: '模型', v: 'mineru' }, { k: 'Key', v: key, secret: true }]
+        id: 'doc', title: '文档解析', where: '知舟设置 → 文档解析',
+        fields: [{ k: '服务', v: 'MinerU 本地部署' }, { k: '地址', v: base }, { k: '模型', v: 'standard' }, { k: 'Key', v: key, secret: true }]
       });
     }
     if (running('searxng')) {
@@ -36,17 +38,19 @@ export function Connect() {
       });
     }
     if (running('ollama')) {
-      list.push({
-        id: 'embed', title: '向量模型（Embedding）', where: '知舟设置 → 检索与索引 → 向量模型',
-        fields: [{ k: '协议', v: 'OpenAI 兼容' }, { k: 'Base URL', v: `${base}/v1` }, { k: '模型', v: 'bge-m3' }, { k: '维度', v: '1024' }, { k: 'API Key', v: key, secret: true }]
-      });
+      for (const m of embeds) {
+        list.push({
+          id: 'embed-' + m.model, title: '向量模型 · ' + m.model, where: '知舟设置 → 知识检索 → 向量模型',
+          fields: [{ k: '协议', v: 'OpenAI 兼容' }, { k: 'Base URL', v: `${base}/v1` }, { k: '模型', v: m.model }, { k: '维度', v: '服务商默认（' + m.dims + ' 维）' }, { k: 'API Key', v: key, secret: true }]
+        });
+      }
       list.push({
         id: 'chat', title: '本地对话模型（可选）', where: '知舟设置 → 模型服务 → 添加',
         fields: [{ k: '协议', v: 'OpenAI 兼容' }, { k: 'Base URL', v: `${base}/v1` }, { k: '模型', v: '在知舟中点「获取模型列表」' }, { k: 'API Key', v: key, secret: true }]
       });
     }
     return list;
-  }, [services, base, key]);
+  }, [services, base, key, embeds]);
 
   const config = useMemo(() => JSON.stringify({
     kind: 'knowark-hub', version: 1, gateway: base, key,

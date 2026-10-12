@@ -170,3 +170,43 @@ fn parse_library(html: &str) -> Vec<LibraryModel> {
         })
         .collect()
 }
+
+// ---------- 向量维度（服务台管理输出维度，v0.51 走查） ----------
+
+/// 支持截取维度（Matryoshka）的模型：取前 N 维并重新归一化，效果损失小、体积大减
+pub fn truncatable(model: &str) -> bool {
+    let m = model.to_ascii_lowercase();
+    ["qwen3-embedding", "nomic-embed-text", "embeddinggemma", "snowflake-arctic-embed2", "mxbai-embed-large"]
+        .iter()
+        .any(|p| m.starts_with(p))
+}
+
+/// 可选输出维度：原生维度及其下的常用档位
+pub fn dim_options(native: usize, truncatable: bool) -> Vec<usize> {
+    let mut out = vec![native];
+    if truncatable {
+        for d in [2048, 1536, 1024, 768, 512, 256] {
+            if d < native {
+                out.push(d);
+            }
+        }
+    }
+    out
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EmbeddingModelInfo {
+    pub model: String,
+    pub native_dims: usize,
+    /// 知舟实际拿到的维度（用户设置的输出维度，未设置时为原生维度）
+    pub dims: usize,
+    pub truncatable: bool,
+    pub options: Vec<usize>,
+}
+
+/// 设置里记的输出维度（键 dims:<模型名>）；非法或不可截取时回落原生维度
+pub fn effective_dims(settings: &crate::settings::Settings, model: &str, native: usize) -> usize {
+    let configured: usize = settings.option("ollama", &format!("dims:{model}"), "0").parse().unwrap_or(0);
+    if configured > 0 && configured < native && truncatable(model) { configured } else { native }
+}

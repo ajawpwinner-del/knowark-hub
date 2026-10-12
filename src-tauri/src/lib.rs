@@ -144,6 +144,27 @@ async fn try_parse(s: State<'_, AppState>, path: String, engine: String) -> R<tr
     trial::parse(snapshot(&s).gateway_port, &key, &path, &engine).await.map_err(e)
 }
 
+/// 已下载的向量模型与维度（「本地模型」与「连接知舟」页共用）
+#[tauri::command]
+async fn embedding_models(s: State<'_, AppState>) -> R<Vec<ollama::EmbeddingModelInfo>> {
+    Ok(s.shared.embedding_models().await)
+}
+
+/// 设置某个向量模型给知舟的输出维度（只对可截取模型生效；0 = 原生维度）
+#[tauri::command]
+async fn set_embedding_dims(s: State<'_, AppState>, model: String, dims: usize) -> R<()> {
+    let mut next = snapshot(&s);
+    let entry = next.services.entry("ollama".into()).or_default();
+    if dims == 0 {
+        entry.options.remove(&format!("dims:{model}"));
+    } else {
+        entry.options.insert(format!("dims:{model}"), dims.to_string());
+    }
+    next.save().map_err(e)?;
+    *s.settings.write().unwrap() = next;
+    Ok(())
+}
+
 #[tauri::command]
 async fn model_library(kind: String) -> R<Vec<ollama::LibraryModel>> {
     ollama::library(&kind).await.map_err(e)
@@ -296,6 +317,8 @@ pub fn run() {
             delete_model,
             model_dims,
             model_library,
+            embedding_models,
+            set_embedding_dims,
             apply_service_options,
             try_search,
             try_parse,
