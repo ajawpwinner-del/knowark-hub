@@ -1,6 +1,6 @@
 // 知舟服务台的设计令牌生成器：色值唯一来源是 docs/brand/tools/brand-academy.mjs（书院）与 entry 的 color.json（状态色），
 // 这里只做格式转换（HarmonyOS 的 #AARRGGBB → CSS rgba），不另抄色值。品牌改色后重跑本脚本即可同步。
-import { readFileSync, writeFileSync, mkdirSync, copyFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, copyFileSync, existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -8,6 +8,11 @@ const here = dirname(fileURLToPath(import.meta.url));
 const hub = resolve(here, '..');
 const repo = resolve(hub, '../..');
 
+// 独立仓库（不在知舟 books 仓库内）时没有品牌源文件：沿用已提交的 src/styles/tokens.css 与 public/brand_*.svg
+if (!existsSync(resolve(repo, 'docs/brand/tools/brand-academy.mjs'))) {
+  console.log('未找到知舟品牌源（独立仓库），沿用已提交的设计令牌');
+  process.exit(0);
+}
 const { TOKENS, THEME } = await import(pathToFileURL(resolve(repo, 'docs/brand/tools/brand-academy.mjs')).href);
 
 const STATUS = ['danger_primary', 'success_primary', 'warning_primary', 'fill_tonal', 'danger_tonal', 'divider', 'scrim',

@@ -2,6 +2,4 @@ node_modules/
 dist/
 src-tauri/target/
 src-tauri/gen/
-# 由 scripts/gen-tokens.mjs 从 docs/brand 生成，不手改
-src/styles/tokens.css
-public/brand_*.svg
+# src/styles/tokens.css 与 public/brand_*.svg 由 scripts/gen-tokens.mjs 从知舟品牌源生成后提交（独立仓库直接使用）

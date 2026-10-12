@@ -53,7 +53,7 @@ export function Connect() {
   }, [services, base, key, embeds]);
 
   const config = useMemo(() => JSON.stringify({
-    kind: 'knowark-hub', version: 1, gateway: base, key,
+    kind: 'knowark-hub', v: 1, gateway: base, key,
     services: Object.fromEntries(entries.map((e) => [e.id, Object.fromEntries(e.fields.filter((f) => !f.secret).map((f) => [f.k, f.v]))]))
   }, null, 2), [entries, base, key]);
 
