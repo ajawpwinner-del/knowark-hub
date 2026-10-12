@@ -59,10 +59,10 @@
     },
     {
       "id": "mineru",
-      "name": "文档解析与图片识别",
+      "name": "文档解析",
       "engine": "MinerU",
       "category": "doc",
-      "summary": "把 PDF、扫描件和图片转成带标题、表格、公式的 Markdown，图片里的文字也能识别。",
+      "summary": "把 PDF 转成带标题、表格、公式的 Markdown，扫描版也能处理，适合论文和书籍。",
       "detail": "服务台会在本机构建镜像（pipeline 后端，CPU 可用），模型首次解析时从 ModelScope 下载。",
       "build": "mineru",
       "image": "knowark/mineru-api:local",

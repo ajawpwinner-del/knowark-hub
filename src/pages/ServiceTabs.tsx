@@ -139,7 +139,7 @@ function TryParse() {
     <div className="row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 12 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
         <div className="row-main">
-          <div className="row-title">选一个 PDF 或图片</div>
+          <div className="row-title">选一个 PDF 文件</div>
           <div className="row-desc">{busy ? `正在处理 ${name}…（PDF 每页约需几秒，首次还要下载模型）` : '走的是知舟实际使用的同一条通路，结果就是导入知舟后的内容。'}</div>
         </div>
         <Button kind="emph" busy={busy} onClick={run}>{busy ? '处理中' : '选择文件'}</Button>

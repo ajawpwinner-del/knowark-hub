@@ -26,6 +26,8 @@ pub struct Shared {
     pub key: Arc<RwLock<String>>,
     pub settings: Arc<RwLock<Settings>>,
     client: reqwest::Client,
+    /// 向量模型实测维度缓存（模型名 → 维度）：首次实测要加载模型，之后直接返回
+    dims: Arc<RwLock<BTreeMap<String, usize>>>,
 }
 
 impl Shared {
@@ -35,7 +37,7 @@ impl Shared {
             .timeout(std::time::Duration::from_secs(600))
             .build()
             .expect("reqwest");
-        Self { key: Arc::new(RwLock::new(key)), settings, client }
+        Self { key: Arc::new(RwLock::new(key)), settings, client, dims: Arc::new(RwLock::new(BTreeMap::new())) }
     }
 
     fn upstream(&self, id: &str) -> String {
@@ -87,6 +89,7 @@ fn router(shared: Shared) -> Router {
         .route("/v1/models", get(models))
         .route("/v1/chat/completions", post(chat))
         .route("/search", get(search))
+        .route("/v1/hub/info", get(hub_info))
         .layer(middleware::from_fn_with_state(shared.clone(), auth))
         .layer(axum::extract::DefaultBodyLimit::max(200 * 1024 * 1024));
     Router::new()
@@ -274,4 +277,50 @@ fn stream_back(r: reqwest::Response) -> Response {
         }
     }
     (status, headers, Body::from_stream(r.bytes_stream())).into_response()
+}
+
+// ---------- 能力清单（知舟扫码配对用，v0.51 FR-009） ----------
+
+/// 返回服务台此刻能提供的能力：哪些服务在运行、有哪些可向量化的模型及实测维度
+async fn hub_info(State(s): State<Shared>) -> Response {
+    let settings = s.settings.read().unwrap().clone();
+    let mut running = BTreeMap::new();
+    for def in crate::catalog::services() {
+        let st = crate::docker::state(def, &settings).await;
+        running.insert(def.id.clone(), st.status == "running");
+    }
+    let mut embedding = Vec::new();
+    let mut chat = false;
+    if running.get("ollama").copied().unwrap_or(false) {
+        let port = settings.host_port("ollama");
+        if let Ok(models) = crate::ollama::list(port).await {
+            for m in models {
+                let cached = s.dims.read().unwrap().get(&m.name).copied();
+                let dims = match cached {
+                    Some(d) => d,
+                    None => {
+                        let d = crate::ollama::embed_dims(port, &m.name).await.unwrap_or(0);
+                        s.dims.write().unwrap().insert(m.name.clone(), d);
+                        d
+                    }
+                };
+                if dims > 0 {
+                    embedding.push(json!({ "model": m.name, "dims": dims }));
+                } else {
+                    chat = true;
+                }
+            }
+        }
+    }
+    Json(json!({
+        "name": "知舟服务台",
+        "version": env!("CARGO_PKG_VERSION"),
+        "services": {
+            "docParse": running.get("mineru").copied().unwrap_or(false),
+            "search": running.get("searxng").copied().unwrap_or(false),
+            "chat": chat
+        },
+        "embeddingModels": embedding
+    }))
+    .into_response()
 }

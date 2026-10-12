@@ -13,10 +13,10 @@ export function Home({ go }: { go: (p: Page) => void }) {
       <section className="hero">
         <img className="hero-mark" src="/brand_mark.svg" alt="" />
         <div>
-          <h2>{running > 0 ? `${running} 项服务正在为知舟工作` : '把 OCR、搜索与本地模型装进自己的电脑'}</h2>
+          <h2>{running > 0 ? `${running} 项服务正在为知舟工作` : '把文档解析、搜索与本地模型装进自己的电脑'}</h2>
           <p>{env?.dockerReady === false
             ? '先按下方体检结果准备好 Docker Desktop，之后每项服务都只需点一下「安装」。'
-            : '挑选需要的服务一键部署，再到「连接知舟」把地址和 Key 填进手机即可。'}</p>
+            : '挑选需要的服务一键部署，再到「连接知舟」用手机上的知舟扫码配对即可。'}</p>
           <Button kind="emph" onClick={() => go(running > 0 ? 'connect' : 'catalog')}>{running > 0 ? '连接知舟' : '去挑选服务'}</Button>
         </div>
       </section>

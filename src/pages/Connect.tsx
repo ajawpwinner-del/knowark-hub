@@ -29,12 +29,6 @@ export function Connect() {
         fields: [{ k: '服务', v: '通用 REST 桥接' }, { k: '地址', v: `${base}/v1/documents/parse#` }, { k: 'Key', v: key, secret: true }]
       });
     }
-    if (running('mineru')) {
-      list.push({
-        id: 'ocr', title: '图片识别（OCR）', where: '知舟设置 → 文档处理 → 「图片识别」页签',
-        fields: [{ k: '服务', v: '通用 REST 桥接' }, { k: '地址', v: `${base}/v1/documents/parse#` }, { k: 'Key', v: key, secret: true }]
-      });
-    }
     if (running('searxng')) {
       list.push({
         id: 'search', title: '网络搜索', where: '知舟设置 → 网络搜索 → SearXNG',
@@ -88,7 +82,7 @@ export function Connect() {
   return (
     <div className="page">
       <h1 className="page-title">连接知舟</h1>
-      <p className="page-sub">手机与电脑连同一个 Wi‑Fi，把下面的值填进知舟对应设置即可。所有服务共用一个地址和 Key。</p>
+      <p className="page-sub">手机与电脑连同一个 Wi‑Fi，在知舟「设置 → 连接服务台」点「扫码配对」扫下面的二维码，一次配好。也可以照下方的值手动填写。</p>
 
       {info.gatewayError && <div className="notice danger"><span>⚠</span><div><b>网关没有启动：</b>{info.gatewayError}。可在「设置」中换一个端口。</div></div>}
       {!info.firewallReady && (
@@ -99,7 +93,7 @@ export function Connect() {
         </div>
       )}
 
-      <Group title="服务台地址">
+      <Group title="扫码配对">
         <div className="row connect-head">
           {qr && <img className="qr" src={qr} alt="连接二维码" />}
           <div className="row-main">

@@ -75,7 +75,7 @@ export async function pickFile(kind: 'image' | 'document'): Promise<string | nul
   const { open } = await import('@tauri-apps/plugin-dialog');
   const filters = kind === 'image'
     ? [{ name: '图片', extensions: ['png', 'jpg', 'jpeg', 'bmp', 'webp'] }]
-    : [{ name: '文档', extensions: ['pdf', 'png', 'jpg', 'jpeg', 'docx', 'pptx'] }];
+    : [{ name: '文档', extensions: ['pdf', 'docx', 'pptx'] }];
   const f = await open({ multiple: false, filters });
   return typeof f === 'string' ? f : null;
 }

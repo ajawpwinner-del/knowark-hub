@@ -6,13 +6,14 @@ Windows 桌面工具，用来一键部署、管理知舟可以对接的自建服
 |---|---|---|
 | 本地模型 | Ollama | 向量模型（bge-m3 等）和可选的本地对话模型 |
 | 网络搜索 | SearXNG | 网络搜索 → SearXNG |
-| 文档解析与图片识别 | MinerU（本机构建，pipeline 后端） | 文档处理 →「文档解析」与「图片识别」 |
+| 文档解析 | MinerU（本机构建，pipeline 后端） | 文档处理 →「文档解析」 |
 
 ## 工作方式
 
 - 每个服务跑在各自的 Docker 容器里，容器名 `knowark-<id>`。端口只绑定 `127.0.0.1`，局域网访问不到。
 - 服务台内置一个**兼容网关**，默认端口 8765，是局域网里唯一开放的入口。它把各服务统一成知舟现有的协议，所以知舟只需填一个地址和一个 Key：
-  - `POST /v1/documents/parse`：知舟的「通用 REST 桥接」。PDF、图片、Office 都交给 MinerU（其内置 OCR 模型识别图片与扫描件）。
+  - `POST /v1/documents/parse`：知舟的「通用 REST 桥接」。PDF、Office 交给 MinerU（扫描版 PDF 由其内置识别模型处理）。
+  - `GET /v1/hub/info`：能力清单（运行中的服务、可向量化模型及实测维度），供知舟「连接服务台」扫码配对。
   - `POST /v1/embeddings`、`GET /v1/models`、`POST /v1/chat/completions`：OpenAI 兼容协议，转给 Ollama。网关会校验返回向量的维数是否等于请求里的 `dimensions`：
     - 支持截取维度的模型，会截取并重新归一化；
     - 其它模型直接报错，并提示正确的维数。
