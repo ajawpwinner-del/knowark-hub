@@ -60,3 +60,7 @@
 ## 致谢
 
 服务台只是把这些优秀的开源项目装进同一个界面：[MinerU](https://github.com/opendatalab/MinerU)、[SearXNG](https://github.com/searxng/searxng)、[Ollama](https://github.com/ollama/ollama)、[Tauri](https://tauri.app)。各服务的模型与镜像遵循其各自的许可证。
+
+## 许可证
+
+本项目以 [Apache License 2.0](LICENSE) 开源。「知舟 / KnowArk」名称与标志不随许可证授权，详见 [NOTICE](NOTICE)；修改后再发布请换用自己的名称与图标。

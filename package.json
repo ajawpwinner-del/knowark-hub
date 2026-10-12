@@ -4,6 +4,7 @@
   "version": "0.1.0",
   "type": "module",
   "description": "知舟服务台：在 Windows 上一键部署与管理知舟可对接的自建服务",
+  "license": "Apache-2.0",
   "scripts": {
     "tokens": "node scripts/gen-tokens.mjs",
     "dev": "npm run tokens && vite",

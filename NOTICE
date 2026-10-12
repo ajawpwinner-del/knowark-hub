@@ -1,0 +1,31 @@
+知舟服务台 · KnowArk Hub
+Copyright 2026 KnowArk 知舟
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+Brand assets
+------------
+The names "知舟" and "KnowArk", and the logo and wordmark files under public/
+(brand_mark.svg, brand_wordmark.svg, brand_seal.svg) and src-tauri/icons/, are
+brand assets of the KnowArk project. As stated in Section 6 of the Apache
+License, the license does not grant permission to use these names or marks,
+except as required for reasonable and customary use in describing the origin of
+the work. If you distribute a modified version, please use your own name and
+icons.
+
+The Chinese characters in the wordmark are derived from the font "Ma Shan Zheng"
+(马善政楷书), licensed under the SIL Open Font License 1.1.
+
+Third-party software
+--------------------
+KnowArk Hub deploys and talks to the following projects, which are downloaded
+as container images or packages at runtime and are not included in this
+repository. Each is governed by its own license:
+
+- MinerU (https://github.com/opendatalab/MinerU)
+- SearXNG (https://github.com/searxng/searxng)
+- Ollama (https://github.com/ollama/ollama) and the models you choose to download
+- Docker Desktop (https://www.docker.com/products/docker-desktop/)
+
+Bundled libraries (Tauri, React, axum, reqwest and others listed in
+package.json and src-tauri/Cargo.toml) are used under their respective licenses.
