@@ -26,7 +26,7 @@ export function Connect() {
     if (running('mineru')) {
       list.push({
         id: 'doc', title: '文档解析', where: '知舟设置 → 文档处理 → 「文档解析」页签',
-        fields: [{ k: '服务', v: '通用 REST 桥接' }, { k: '地址', v: `${base}/v1/documents/parse#` }, { k: 'Key', v: key, secret: true }]
+        fields: [{ k: '服务', v: '通用 REST 桥接' }, { k: '地址', v: `${base}/v1/documents/parse#` }, { k: '模型', v: 'mineru' }, { k: 'Key', v: key, secret: true }]
       });
     }
     if (running('searxng')) {
