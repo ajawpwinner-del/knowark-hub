@@ -1,0 +1,124 @@
+{
+  "_note": "服务目录唯一来源：前端展示与 Rust 端部署共用（src-tauri 以 include_str! 读入）。镜像可在「我的服务 → 设置」里覆盖。",
+  "services": [
+    {
+      "id": "ollama",
+      "name": "本地模型",
+      "engine": "Ollama",
+      "category": "model",
+      "summary": "在本机运行向量（Embedding）模型和对话模型，知识库检索不必把内容发到云端。",
+      "detail": "首次启动后在下方挑选模型下载。知识库检索推荐 bge-m3（中文好、1024 维）。",
+      "image": "ollama/ollama:latest",
+      "dockerHub": true,
+      "containerPort": 11434,
+      "hostPort": 11434,
+      "volumes": [
+        {
+          "name": "knowark-ollama",
+          "target": "/root/.ollama"
+        }
+      ],
+      "env": {
+        "OLLAMA_KEEP_ALIVE": "10m"
+      },
+      "command": [],
+      "gpu": "optional",
+      "needs": {
+        "ramGb": 4,
+        "diskGb": 6,
+        "note": "模型另计：bge-m3 约 1.2GB"
+      }
+    },
+    {
+      "id": "searxng",
+      "name": "网络搜索",
+      "engine": "SearXNG",
+      "category": "search",
+      "summary": "自建的聚合搜索引擎，替知舟联网查资料，不需要任何搜索 API Key。",
+      "detail": "服务台会自动生成开启 JSON 输出的配置；搜索词只在你的电脑与各搜索引擎之间往来。",
+      "image": "searxng/searxng:latest",
+      "dockerHub": true,
+      "containerPort": 8080,
+      "hostPort": 8888,
+      "volumes": [
+        {
+          "bind": "searxng",
+          "target": "/etc/searxng"
+        }
+      ],
+      "env": {
+        "SEARXNG_BASE_URL": "http://localhost:8888/"
+      },
+      "command": [],
+      "gpu": "none",
+      "needs": {
+        "ramGb": 1,
+        "diskGb": 1,
+        "note": "国内网络下部分引擎可能不可用"
+      }
+    },
+    {
+      "id": "mineru",
+      "name": "文档解析与图片识别",
+      "engine": "MinerU",
+      "category": "doc",
+      "summary": "把 PDF、扫描件和图片转成带标题、表格、公式的 Markdown，图片里的文字也能识别。",
+      "detail": "服务台会在本机构建镜像（pipeline 后端，CPU 可用），模型首次解析时从 ModelScope 下载。",
+      "build": "mineru",
+      "image": "knowark/mineru-api:local",
+      "dockerHub": false,
+      "containerPort": 8000,
+      "hostPort": 8800,
+      "volumes": [
+        {
+          "name": "knowark-mineru",
+          "target": "/data"
+        }
+      ],
+      "env": {
+        "HF_HOME": "/data/huggingface",
+        "MODELSCOPE_CACHE": "/data/modelscope",
+        "MINERU_MODEL_SOURCE": "modelscope"
+      },
+      "command": [],
+      "gpu": "optional",
+      "needs": {
+        "ramGb": 8,
+        "diskGb": 10,
+        "note": "CPU 解析较慢，长文档需耐心"
+      }
+    }
+  ],
+  "embeddingModels": [
+    {
+      "name": "bge-m3",
+      "dims": 1024,
+      "size": "1.2 GB",
+      "note": "推荐：中英文俱佳，知识库检索首选"
+    },
+    {
+      "name": "qwen3-embedding:0.6b",
+      "dims": 1024,
+      "size": "640 MB",
+      "note": "轻量，支持截取维度"
+    },
+    {
+      "name": "nomic-embed-text",
+      "dims": 768,
+      "size": "274 MB",
+      "note": "英文为主，体积小"
+    }
+  ],
+  "chatModels": [
+    {
+      "name": "qwen3:4b",
+      "size": "2.5 GB",
+      "note": "可选：本地对话，8GB 内存可跑"
+    },
+    {
+      "name": "qwen3:8b",
+      "size": "5.2 GB",
+      "note": "可选：效果更好，建议有独显"
+    }
+  ]
+}
