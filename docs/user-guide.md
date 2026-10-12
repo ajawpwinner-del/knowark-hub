@@ -24,7 +24,7 @@
 
 ## 2. 安装服务台
 
-在 [Releases](../../../releases) 下载最新的 `知舟服务台_x.y.z_x64-setup.exe`，双击安装（只安装给当前用户，不需要管理员权限）。安装程序会在缺少 WebView2 时自动补上。
+在 [Releases](../../../releases) 下载最新的 `KnowArkHub_x.y.z_x64-setup.exe`，双击安装（只安装给当前用户，不需要管理员权限）。安装程序会在缺少 WebView2 时自动补上。
 
 打开后先看首页的 **环境体检**：
 

@@ -39,7 +39,9 @@ npx tauri build --no-bundle   # 只生成 exe（便携运行，配置写在 exe 
 
 ```powershell
 git tag v0.1.0; git push origin v0.1.0
-gh release create v0.1.0 "src-tauri/target/release/bundle/nsis/知舟服务台_0.1.0_x64-setup.exe" --notes-file CHANGELOG.md
+# GitHub 会丢掉资源文件名里的中文，上传前改成英文名
+Copy-Item "src-tauri/target/release/bundle/nsis/知舟服务台_0.1.0_x64-setup.exe" KnowArkHub_0.1.0_x64-setup.exe
+gh release create v0.1.0 KnowArkHub_0.1.0_x64-setup.exe --notes-file CHANGELOG.md
 ```
 
 安装包未做代码签名，首次运行 Windows SmartScreen 可能提示「未知发布者」，选择「仍要运行」即可。

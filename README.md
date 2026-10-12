@@ -37,7 +37,7 @@
 > 详细步骤见 [使用指南](docs/user-guide.md)。
 
 1. **准备环境**：Windows 10 2004 及以上（推荐 Windows 11），16 GB 内存更从容，磁盘留出 20—30 GB。安装 [Docker Desktop](https://www.docker.com/products/docker-desktop/)（会顺带启用 WSL 2），打开一次，等左下角显示 *Engine running*。
-2. **安装服务台**：在 [Releases](../../releases) 下载 `知舟服务台_x.y.z_x64-setup.exe` 安装。
+2. **安装服务台**：在 [Releases](../../releases) 下载 `KnowArkHub_x.y.z_x64-setup.exe` 安装。
 3. **部署服务**：首页「环境体检」全绿后，到「服务目录」点「安装」。
 4. **连接知舟**：手机和电脑连同一个 Wi‑Fi。服务台「连接知舟」页点「允许访问」放行防火墙，然后在知舟「设置 → 连接服务台」点「扫码配对」。
 
